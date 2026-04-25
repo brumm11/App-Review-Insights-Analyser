@@ -50,7 +50,7 @@ class PulseSummary(BaseModel):
     product: str
     window: WindowModel
     stats: PulseStats
-    top_themes: list[Theme] = Field(default_factory=list)
+    top_themes: list[Theme] = Field(default_factory=list, max_length=5)
     quotes: list[Quote] = Field(default_factory=list)
     action_ideas: list[ActionIdea] = Field(default_factory=list)
     what_this_solves: list[AudienceValue] = Field(default_factory=list)

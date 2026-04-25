@@ -18,15 +18,23 @@ def build_doc_requests(summary: PulseSummary) -> list[dict[str, object]]:
     requests: list[dict[str, object]] = [
         {"kind": "heading1", "text": heading, "anchor": anchor},
         {
+            "kind": "paragraph",
+            "text": (
+                "Executive snapshot of customer feedback trends from public app-store reviews. "
+                "Focus on high-impact friction themes and immediate product actions."
+            ),
+        },
+        {
             "kind": "stats",
             "items": {
-                "total_reviews": summary.stats.total_reviews,
-                "avg_rating": summary.stats.avg_rating,
-                "rating_delta_vs_prev": summary.stats.rating_delta_vs_prev,
+                "Total reviews": summary.stats.total_reviews,
+                "Average rating": round(summary.stats.avg_rating, 2),
+                "Rating delta vs previous window": round(summary.stats.rating_delta_vs_prev, 2),
             },
         },
+        {"kind": "heading2", "text": "Top 3 Themes"},
     ]
-    for theme in summary.top_themes:
+    for theme in summary.top_themes[:3]:
         requests.append({"kind": "heading2", "text": f"{theme.rank}. {theme.label}"})
         requests.append({"kind": "paragraph", "text": theme.description})
         requests.append(
@@ -35,17 +43,20 @@ def build_doc_requests(summary: PulseSummary) -> list[dict[str, object]]:
                 "items": [
                     f"Sentiment: {theme.sentiment}",
                     f"Review count: {theme.review_count}",
-                    f"Representative IDs: {', '.join(theme.representative_review_ids)}",
+                    "Representative examples selected from review set.",
                 ],
             }
         )
     if summary.quotes:
         requests.append({"kind": "heading2", "text": "Verbatim Quotes"})
-        requests.append({"kind": "quotes", "items": [quote.text for quote in summary.quotes]})
+        requests.append({"kind": "quotes", "items": [quote.text for quote in summary.quotes[:3]]})
     if summary.action_ideas:
         requests.append({"kind": "heading2", "text": "Action Ideas"})
         requests.append(
-            {"kind": "bullets", "items": [idea.detail for idea in summary.action_ideas]}
+            {
+                "kind": "bullets",
+                "items": [f"{idea.title}: {idea.detail}" for idea in summary.action_ideas[:3]],
+            }
         )
     requests.append(
         {

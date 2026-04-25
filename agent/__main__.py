@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -12,6 +14,7 @@ from agent.logging import bind_run_id, configure_logging
 from agent.storage import (
     initialize_db,
     load_clusters_for_run,
+    load_reviews_for_csv,
     load_reviews_for_run,
     load_reviews_map,
     load_run_context,
@@ -147,6 +150,11 @@ def summarize(
     settings = load_settings()
     initialize_db(settings.db_path)
     bind_run_id(run)
+    os.environ["PULSE_USE_REAL_GOOGLE"] = str(settings.use_real_google).lower()
+    os.environ["PULSE_GOOGLE_OAUTH_CLIENT_JSON_PATH"] = str(settings.google_oauth_client_json_path)
+    os.environ["PULSE_GOOGLE_OAUTH_TOKEN_PATH"] = str(settings.google_oauth_token_path)
+    if settings.gdoc_id:
+        os.environ["PULSE_GDOC_ID"] = settings.gdoc_id
     context = load_run_context(settings.db_path, run)
     if context is None:
         raise typer.BadParameter(f"Unknown run id: {run}")
@@ -246,7 +254,8 @@ def render(
     )
     print(
         "Rendering complete: wrote "
-        f"{outputs['doc_requests']}, {outputs['email_html']}, {outputs['email_text']}"
+        f"{outputs['doc_requests']}, {outputs['email_html']}, "
+        f"{outputs['email_text']}, {outputs['weekly_note']}"
     )
 
 
@@ -362,6 +371,31 @@ def publish(
             status="published",
         )
     print(f"Publish complete: target={target}")
+
+
+@app.command("export-csv")
+def export_csv(
+    run: Annotated[str, typer.Option("--run", help="Run id to export.")],
+    out: Annotated[
+        str | None,
+        typer.Option("--out", help="Output CSV path. Defaults to data/artifacts/<run>/reviews.csv"),
+    ] = None,
+) -> None:
+    settings = load_settings()
+    initialize_db(settings.db_path)
+    bind_run_id(run)
+    rows = load_reviews_for_csv(settings.db_path, run)
+    if not rows:
+        raise typer.BadParameter(f"No reviews found for run id: {run}")
+
+    output_path = Path(out) if out else settings.artifacts_dir / run / "reviews.csv"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fields = ["id", "source", "rating", "title", "body", "posted_at", "language", "country"]
+    with output_path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"CSV export complete: wrote {output_path}")
 
 
 @app.command()

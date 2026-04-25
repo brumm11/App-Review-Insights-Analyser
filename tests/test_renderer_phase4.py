@@ -7,6 +7,7 @@ import pytest
 from jsonschema import ValidationError
 
 from agent.renderer.docs_tree import validate_doc_requests
+from agent.renderer.note import MAX_NOTE_WORDS
 from agent.renderer.service import load_schema, render_artifacts
 from agent.summarization.models import (
     ActionIdea,
@@ -58,11 +59,24 @@ def test_phase4_render_outputs_are_deterministic(tmp_path: Path) -> None:
     assert first["email_html"].read_text(encoding="utf-8") == second["email_html"].read_text(
         encoding="utf-8"
     )
+    assert first["weekly_note"].read_text(encoding="utf-8") == second["weekly_note"].read_text(
+        encoding="utf-8"
+    )
     payload = json.loads(first["doc_requests"].read_text(encoding="utf-8"))
     assert payload["requests"][0]["anchor"] == "pulse-groww-2026-W16"
+    note = first["weekly_note"].read_text(encoding="utf-8")
+    assert len(note.split()) <= MAX_NOTE_WORDS
 
 
 def test_phase4_schema_rejects_malformed_doc_requests() -> None:
     schema = load_schema(Path("templates/doc_section.schema.json"))
     with pytest.raises(ValidationError):
         validate_doc_requests([{"text": "missing-kind"}], schema)
+
+
+def test_phase4_rejects_artifact_pii(tmp_path: Path) -> None:
+    schema = load_schema(Path("templates/doc_section.schema.json"))
+    summary = _summary()
+    summary.quotes[0].text = "Contact me at test@example.com"
+    with pytest.raises(ValueError):
+        render_artifacts(run_id="run1", summary=summary, artifacts_dir=tmp_path, schema=schema)

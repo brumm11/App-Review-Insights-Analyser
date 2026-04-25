@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,6 +24,12 @@ class DocsOps:
         self.db_path = db_path
 
     def resolve_document(self, product: str) -> str:
+        env_specific = os.getenv(f"PULSE_GDOC_ID_{product.upper()}")
+        env_default = os.getenv("PULSE_GDOC_ID")
+        env_doc_id = env_specific or env_default
+        if env_doc_id:
+            set_product_gdoc_id(self.db_path, product, env_doc_id)
+            return env_doc_id
         cached = get_product_gdoc_id(self.db_path, product)
         if cached:
             return cached
@@ -66,10 +73,13 @@ class DocsOps:
         self.session.call("docs.batch_update", document_id=doc_id, requests=requests)
         refreshed = self.session.call("docs.get_document", document_id=doc_id)
         heading_id = str(refreshed.get("headings", {}).get(anchor, ""))
-        if not heading_id:
-            raise RuntimeError(f"Unable to resolve heading_id for anchor={anchor}")
-        deep_link = self._build_deep_link(doc_id, heading_id)
-        set_run_delivery(self.db_path, run_id=run_id, gdoc_heading_id=heading_id)
+        if heading_id:
+            deep_link = self._build_deep_link(doc_id, heading_id)
+            set_run_delivery(self.db_path, run_id=run_id, gdoc_heading_id=heading_id)
+        else:
+            deep_link = f"https://docs.google.com/document/d/{doc_id}/edit"
+            set_run_delivery(self.db_path, run_id=run_id, gdoc_heading_id="document")
+            heading_id = "document"
         return DocsPublishResult(
             doc_id=doc_id,
             heading_id=heading_id,

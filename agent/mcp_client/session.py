@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
 
-from mcp_servers.services import DocsService, GmailService, MCPStateStore
+from mcp_servers.services import MCPStateStore, build_docs_service, build_gmail_service
 
 
 class MCPTransport(Protocol):
@@ -133,8 +133,8 @@ class FastMCPInProcessTransport:
 
     def __init__(self, state_path: Path) -> None:
         store = MCPStateStore(state_path)
-        self.docs = DocsService(store)
-        self.gmail = GmailService(store)
+        self.docs = build_docs_service(store)
+        self.gmail = build_gmail_service(store)
 
     def call_tool(self, server: str, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if server == "docs":

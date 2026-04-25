@@ -19,6 +19,64 @@ from agent.summarization.models import (
 )
 
 NORM_SPACE = re.compile(r"\s+")
+MAX_THEMES = 5
+NOTE_THEMES = 3
+NOTE_QUOTES = 3
+NOTE_ACTIONS = 3
+GENERIC_KEYWORDS = {
+    "and",
+    "this",
+    "that",
+    "with",
+    "from",
+    "have",
+    "very",
+    "good",
+    "great",
+    "easy",
+    "nice",
+    "groww",
+    "application",
+    "time",
+    "app",
+}
+THEME_RULES: list[tuple[str, set[str], str]] = [
+    (
+        "Onboarding",
+        {"signup", "onboard", "onboarding", "register", "kycstart"},
+        "Account setup and first-use journey friction.",
+    ),
+    (
+        "KYC & Verification",
+        {"kyc", "verify", "verification", "pan", "aadhaar", "document", "documents"},
+        "Identity verification and compliance flow issues.",
+    ),
+    (
+        "Payments & Transactions",
+        {
+            "payment",
+            "payments",
+            "upi",
+            "transfer",
+            "deposit",
+            "withdraw",
+            "withdrawal",
+            "failed",
+            "transaction",
+        },
+        "Money movement reliability and transaction completion issues.",
+    ),
+    (
+        "Portfolio & Statements",
+        {"statement", "statements", "portfolio", "holdings", "report", "reports", "tax", "pnl"},
+        "Portfolio visibility, reports, and statement clarity gaps.",
+    ),
+    (
+        "Performance & Reliability",
+        {"crash", "slow", "hang", "loading", "lag", "bug", "issue", "error"},
+        "App responsiveness, crashes, and reliability concerns.",
+    ),
+]
 
 
 def normalize_text(value: str) -> str:
@@ -87,18 +145,19 @@ class SummarizationService:
                 )
             )
 
+        deduped = self._merge_themes_by_label(themes)
         ranked = sorted(
-            themes,
+            deduped,
             key=lambda t: t.review_count * abs(self._sentiment_weight(t.sentiment)),
             reverse=True,
-        )[:3]
+        )[:MAX_THEMES]
         ranked = [
             theme.model_copy(update={"rank": idx})
             for idx, theme in enumerate(ranked, start=1)
         ]
-
-        quotes = self.select_quotes(ranked, reviews_by_id)
-        ideas = self.generate_action_ideas(ranked)
+        note_themes = ranked[:NOTE_THEMES]
+        quotes = self.select_quotes(note_themes, reviews_by_id)[:NOTE_QUOTES]
+        ideas = self.generate_action_ideas(note_themes)[:NOTE_ACTIONS]
 
         all_ratings = [int(item["rating"]) for item in reviews_by_id.values()]
         summary = PulseSummary(
@@ -126,10 +185,22 @@ class SummarizationService:
         return summary, metrics
 
     def label_theme(self, *, keyphrases: list[str], medoid_reviews: list[str]) -> dict[str, str]:
-        keyword = keyphrases[0] if keyphrases else "experience"
+        candidates = [phrase.lower() for phrase in keyphrases]
+        candidate_text = " ".join(candidates)
+        sample_text = (medoid_reviews[0] if medoid_reviews else "").lower()
+        for label, keywords, description in THEME_RULES:
+            has_keyword = any(term in candidate_text for term in keywords)
+            has_text_match = any(term in sample_text for term in keywords)
+            if has_keyword or has_text_match:
+                return {
+                    "label": label,
+                    "description": description,
+                    "sample": scrub_pii(medoid_reviews[0] if medoid_reviews else ""),
+                }
+
         return {
-            "label": keyword.replace("_", " ").title(),
-            "description": f"Users consistently discuss {keyword} in recent reviews.",
+            "label": "Overall Experience",
+            "description": "General usability and trust feedback that does not fit a single flow.",
             "sample": scrub_pii(medoid_reviews[0] if medoid_reviews else ""),
         }
 
@@ -201,6 +272,36 @@ class SummarizationService:
     @staticmethod
     def _sentiment_weight(value: str) -> int:
         return {"negative": -2, "mixed": 1, "positive": 1}.get(value, 1)
+
+    @staticmethod
+    def _merge_themes_by_label(themes: list[Theme]) -> list[Theme]:
+        merged: dict[str, Theme] = {}
+        for theme in themes:
+            key = theme.label.lower().strip()
+            existing = merged.get(key)
+            if existing is None:
+                merged[key] = theme
+                continue
+            sentiments = [existing.sentiment, theme.sentiment]
+            if "negative" in sentiments:
+                sentiment = "negative"
+            elif "mixed" in sentiments:
+                sentiment = "mixed"
+            else:
+                sentiment = "positive"
+            reps = list(
+                dict.fromkeys(
+                    existing.representative_review_ids + theme.representative_review_ids
+                )
+            )
+            merged[key] = existing.model_copy(
+                update={
+                    "review_count": existing.review_count + theme.review_count,
+                    "representative_review_ids": reps[:3],
+                    "sentiment": sentiment,
+                }
+            )
+        return list(merged.values())
 
     @staticmethod
     def _is_verbatim_quote(candidate: str, review_bodies: list[str]) -> bool:

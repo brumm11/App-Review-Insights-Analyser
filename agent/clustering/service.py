@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from hashlib import sha1
 
 import hdbscan
@@ -17,6 +18,58 @@ from agent.clustering.embeddings import (
     embed_with_cache,
 )
 from agent.clustering.models import ClusterOutput, ClusterRecord, ClusterReview
+
+TOKEN_RE = re.compile(r"[a-zA-Z]{3,}")
+STOPWORDS = {
+    "and",
+    "for",
+    "but",
+    "not",
+    "are",
+    "was",
+    "were",
+    "can",
+    "cant",
+    "cannot",
+    "will",
+    "very",
+    "this",
+    "that",
+    "with",
+    "from",
+    "have",
+    "just",
+    "really",
+    "good",
+    "nice",
+    "great",
+    "best",
+    "worst",
+    "app",
+    "apps",
+    "using",
+    "used",
+    "user",
+    "users",
+    "please",
+    "would",
+    "there",
+    "their",
+    "about",
+    "after",
+    "before",
+    "when",
+    "they",
+    "them",
+    "your",
+    "you",
+    "its",
+    "it's",
+    "much",
+    "more",
+    "less",
+    "also",
+}
 
 
 class ClusteringService:
@@ -107,12 +160,19 @@ class ClusteringService:
                 top_n=top_n,
             )
             return [item[0] for item in values]
-        tokens = [word.lower() for word in joined.split() if word.isalpha() and len(word) > 3]
+        tokens = [token.lower() for token in TOKEN_RE.findall(joined)]
         counts: dict[str, int] = {}
         for token in tokens:
+            if token in STOPWORDS:
+                continue
             counts[token] = counts.get(token, 0) + 1
-        ranked = sorted(counts.items(), key=lambda x: (-x[1], x[0]))[:top_n]
-        return [token for token, _ in ranked]
+        ranked = sorted(counts.items(), key=lambda x: (-x[1], x[0]))
+        values = [token for token, _ in ranked[:top_n]]
+        if values:
+            return values
+        # Fallback: never return empty keyphrases.
+        backup = sorted({token.lower() for token in TOKEN_RE.findall(joined)})[:top_n]
+        return backup or ["experience"]
 
     @staticmethod
     def _medoid_index(vectors: NDArray[np.float32]) -> int:

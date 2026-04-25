@@ -290,6 +290,37 @@ def load_reviews_map(db_path: Path, review_ids: list[str]) -> dict[str, dict[str
     }
 
 
+def load_reviews_for_csv(db_path: Path, run_id: str) -> list[dict[str, str]]:
+    run = load_run_window(db_path, run_id)
+    if run is None:
+        return []
+    product_key, start, end = run
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT id, source, rating, title, body, posted_at, language, country
+            FROM reviews
+            WHERE product_key = ?
+              AND date(posted_at) BETWEEN date(?) AND date(?)
+            ORDER BY posted_at ASC, id ASC
+            """,
+            (product_key, start, end),
+        ).fetchall()
+    return [
+        {
+            "id": str(row[0]),
+            "source": str(row[1]),
+            "rating": str(row[2]),
+            "title": str(row[3] or ""),
+            "body": str(row[4]),
+            "posted_at": str(row[5]),
+            "language": str(row[6]),
+            "country": str(row[7]),
+        }
+        for row in rows
+    ]
+
+
 def update_run_metrics(db_path: Path, run_id: str, new_metrics: dict[str, object]) -> None:
     with sqlite3.connect(db_path) as conn:
         existing = conn.execute("SELECT metrics_json FROM runs WHERE id = ?", (run_id,)).fetchone()

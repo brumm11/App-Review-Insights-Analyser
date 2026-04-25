@@ -30,6 +30,24 @@ def _sample_inputs() -> tuple[list[dict[str, object]], dict[str, dict[str, objec
     return clusters, reviews
 
 
+def _many_clusters() -> tuple[list[dict[str, object]], dict[str, dict[str, object]]]:
+    clusters: list[dict[str, object]] = []
+    reviews: dict[str, dict[str, object]] = {}
+    for idx in range(7):
+        rid = f"r{idx+1}"
+        cid = f"c{idx+1}"
+        reviews[rid] = {"id": rid, "body": f"Issue {idx} in payments and onboarding", "rating": 2}
+        clusters.append(
+            {
+                "id": cid,
+                "review_ids": [rid],
+                "keyphrases": [f"theme_{idx}"],
+                "medoid_review_id": rid,
+            }
+        )
+    return clusters, reviews
+
+
 def test_phase3_summary_deterministic_and_grounded() -> None:
     clusters, reviews = _sample_inputs()
     service = SummarizationService(
@@ -58,6 +76,25 @@ def test_phase3_summary_deterministic_and_grounded() -> None:
     normalized_review_text = " ".join(value["body"].lower() for value in reviews.values())
     for quote in first.quotes:
         assert quote.text.lower() in normalized_review_text
+
+
+def test_phase3_theme_cap_is_max_five() -> None:
+    clusters, reviews = _many_clusters()
+    service = SummarizationService(
+        max_retries=1,
+        timeout_seconds=5,
+        token_cap=10000,
+        cost_cap_usd=1.0,
+    )
+    summary, _ = service.summarize_pulse(
+        product="groww",
+        iso_week="2026-W16",
+        window_start="2026-04-13",
+        window_end="2026-04-19",
+        clusters=clusters,
+        reviews_by_id=reviews,
+    )
+    assert len(summary.top_themes) == 5
 
 
 def test_phase3_cost_cap_raises() -> None:

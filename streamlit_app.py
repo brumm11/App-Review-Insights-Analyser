@@ -28,6 +28,15 @@ def run_command(
     return process.returncode, process.stdout, process.stderr
 
 
+@st.cache_data(show_spinner=False)
+def check_pipeline_cli() -> tuple[bool, str]:
+    return_code, _, stderr = run_command([sys.executable, "-m", "agent.__main__", "--help"])
+    if return_code == 0:
+        return True, ""
+    detail = stderr.strip() or "Missing runtime dependencies in this deployment."
+    return False, detail
+
+
 def load_recent_runs(limit: int = 10) -> list[dict[str, Any]]:
     if not DB_PATH.exists():
         return []
@@ -66,10 +75,21 @@ with st.sidebar:
     iso_week = st.text_input("ISO week", value="2026-W16")
     weeks = st.number_input("Ingestion window weeks", min_value=1, max_value=20, value=10, step=1)
     dry_run = st.toggle("Dry-run publish (no send)", value=True)
+    run_id_to_publish = st.text_input("Run ID to publish", value="")
+
+cli_available, cli_error = check_pipeline_cli()
+if not cli_available:
+    st.warning(
+        "Pipeline CLI is unavailable in this Streamlit environment. "
+        "Use this app for run visibility, or install full project dependencies "
+        "to enable Run/Publish actions."
+    )
+    with st.expander("CLI error details"):
+        st.code(cli_error, language="text")
 
 col1, col2, col3 = st.columns(3)
 
-if col1.button("Run Full Pipeline", use_container_width=True):
+if col1.button("Run Full Pipeline", use_container_width=True, disabled=not cli_available):
     env_flag = "false" if dry_run else "true"
     cmd = [
         sys.executable,
@@ -99,16 +119,15 @@ if col1.button("Run Full Pipeline", use_container_width=True):
     else:
         st.error(f"Pipeline failed with exit code {return_code}")
 
-if col2.button("Publish Docs+Gmail", use_container_width=True):
-    run_id = st.text_input("Run ID to publish", value="")
-    if run_id.strip():
+if col2.button("Publish Docs+Gmail", use_container_width=True, disabled=not cli_available):
+    if run_id_to_publish.strip():
         cmd = [
             sys.executable,
             "-m",
             "agent.__main__",
             "publish",
             "--run",
-            run_id.strip(),
+            run_id_to_publish.strip(),
             "--target",
             "both",
         ]

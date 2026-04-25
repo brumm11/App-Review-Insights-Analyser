@@ -2,6 +2,15 @@ Weekly Product Review Pulse — Detailed Architecture
 
 An AI Agent that ingests App Store / Play Store reviews for a selected fintech product (INDMoney, Groww, PowerUp Money, Wealth Monitor, Kuvera), uses LLMs to detect themes and produce a one-page weekly insight report, and then delivers that report to stakeholders using MCP (Model Context Protocol) for Google Workspace — specifically the Google Docs MCP server (to append the report to a running Google Doc) and the Gmail MCP server (to send the stakeholder email).
 
+Implementation status (Apr 2026):
+- End-to-end run is operational through all phases (`ingest -> cluster -> summarize -> render -> publish`).
+- Current default MCP profile is `fastmcp` (local mock services for Docs/Gmail), not official Google-hosted MCP servers.
+- Latest validated run command:
+  - `python -m agent.__main__ run --product groww --week 2026-W16 --weeks 10`
+  - Outcome: success (`Run complete ... completed=True`) with docs+email publish completed.
+- Reviews are ingested from public sources only (App Store RSS + Play Store public scraper) with PII scrubbing before persistence and before output artifacts.
+- A lightweight Streamlit control panel exists at `streamlit_app.py` for manual execution/inspection; the CLI remains the primary production interface.
+
 
 1. Goals & Non-Goals
 

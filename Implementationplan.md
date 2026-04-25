@@ -3,6 +3,21 @@ Weekly Product Review Pulse — Phase-wise Implementation Plan
 
 Derived from docs/architecture.md. The build is split into 8 incremental phases. Each phase produces something independently testable and, from Phase 1 onward, demoable via the CLI. Each phase has a dedicated evaluations.md (how we prove it works) and edge-cases.md (what we must survive) under docs/phases/<phase>/.
 
+Current status snapshot (Apr 2026):
+- Phases `0-7` are implemented in code and runnable.
+- MCP delivery is currently wired to local `fastmcp` services for Docs/Gmail.
+- Latest rerun verification (executed now):  
+  `python -m agent.__main__ run --product groww --week 2026-W16 --weeks 10`  
+  completed successfully with publish target `both`.
+- Latest run metrics observed in logs:
+  - Ingestion: fetched `5490`, kept `1727`
+  - Clustering: input `3400`, clusters `58`
+  - Summarization/render/publish: completed with retry handling for transient Groq `429` responses
+
+Optional next increment (not required for production runs):
+- Phase 8 (optional UI): keep `streamlit_app.py` as an operator console for ad-hoc runs, status checks, and artifact previews.
+- Production scheduling and reliability continue to use CLI + workflow orchestration, not the UI.
+
 
 Guiding Principles
 

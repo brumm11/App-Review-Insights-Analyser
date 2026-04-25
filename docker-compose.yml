@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  pulse-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["--help"]
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+  docs-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "mcp_servers.docs_server"]
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+  gmail-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "mcp_servers.gmail_server"]
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data

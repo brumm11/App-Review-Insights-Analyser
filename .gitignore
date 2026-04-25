@@ -1,0 +1,12 @@
+.env
+data/mcp/mock_state.json
+__pycache__/
+*.py[cod]
+data/pulse.db
+data/raw/
+data/cache/
+data/artifacts/
+data/summaries/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

@@ -384,6 +384,11 @@ with st.expander("Advanced (optional)", expanded=False):
         value=False,
         help="When ON, publish succeeds but Resend/Gmail will not actually send — useful for testing.",
     )
+    allow_repeat_send = st.toggle(
+        "Allow repeat send (same run)",
+        value=True,
+        help="When OFF, a second send for the same run id is skipped (idempotent). Turn ON to deliver the same report again.",
+    )
     st.text_input(
         "Dev override: run id (40 hex, optional)",
         key="dev_run_id_override",
@@ -406,6 +411,11 @@ with hero:
         st.warning(
             "**Dry-run is on** — “Send report” will **not** deliver mail. "
             "Turn off *Dry-run send* under **Advanced (optional)** to send for real."
+        )
+    elif not allow_repeat_send:
+        st.info(
+            "**Repeat send guard is on** — if this run was already emailed, Send report will be skipped. "
+            "Enable *Allow repeat send* in Advanced to send again."
         )
     c1, c2, c3 = st.columns([1.1, 1.1, 1])
     run_clicked = c1.button(
@@ -492,7 +502,11 @@ if send_clicked:
             "--target",
             "gmail",
         ]
-        code, out, err = run_command(cmd, env_overrides={"PULSE_CONFIRM_SEND": env_flag})
+        pub_env = {
+            "PULSE_CONFIRM_SEND": env_flag,
+            "PULSE_ALLOW_RESEND": "true" if allow_repeat_send else "false",
+        }
+        code, out, err = run_command(cmd, env_overrides=pub_env)
         st.session_state["last_cli"] = {
             "title": "Send report — log",
             "stdout": out,
@@ -514,8 +528,11 @@ if send_clicked:
                 )
                 st.toast("No email sent — check log", icon="⚠️")
             elif "skipped" in out_lower:
-                st.info("Send was **skipped** (e.g. duplicate for this run id). Check the activity log for details.")
-                st.toast("Skipped (duplicate?)", icon="ℹ️")
+                st.info(
+                    "Send was **skipped** — this run was already marked as sent and *Allow repeat send* is off. "
+                    "Turn **Allow repeat send (same run)** on in Advanced, or set `PULSE_ALLOW_RESEND=true`."
+                )
+                st.toast("Skipped (idempotent guard)", icon="ℹ️")
             else:
                 st.session_state["last_sent_at"] = now_iso()
                 st.toast("Email send completed", icon="✅")
@@ -546,6 +563,10 @@ with st.expander("Power tools", expanded=False):
     p1, p2 = st.columns(2)
     if p1.button("Run full pipeline (includes publish)", use_container_width=True):
         env_flag = "false" if dry_run else "true"
+        pub_env = {
+            "PULSE_CONFIRM_SEND": env_flag,
+            "PULSE_ALLOW_RESEND": "true" if allow_repeat_send else "false",
+        }
         cmd = [
             sys.executable,
             "-m",
@@ -558,7 +579,7 @@ with st.expander("Power tools", expanded=False):
             "--weeks",
             str(weeks),
         ]
-        code, out, err = run_command(cmd, env_overrides={"PULSE_CONFIRM_SEND": env_flag})
+        code, out, err = run_command(cmd, env_overrides=pub_env)
         st.session_state["last_cli"] = {"title": "Full pipeline", "stdout": out, "stderr": err, "return_code": code}
         if code == 0:
             rid = build_run_id(product, iso_week)
@@ -573,6 +594,10 @@ with st.expander("Power tools", expanded=False):
     rid_pub = effective_run_id()
     if p2.button("Publish docs + email", use_container_width=True, disabled=not rid_pub):
         env_flag = "false" if dry_run else "true"
+        pub_env = {
+            "PULSE_CONFIRM_SEND": env_flag,
+            "PULSE_ALLOW_RESEND": "true" if allow_repeat_send else "false",
+        }
         cmd = [
             sys.executable,
             "-m",
@@ -583,7 +608,7 @@ with st.expander("Power tools", expanded=False):
             "--target",
             "both",
         ]
-        code, out, err = run_command(cmd, env_overrides={"PULSE_CONFIRM_SEND": env_flag})
+        code, out, err = run_command(cmd, env_overrides=pub_env)
         st.session_state["last_cli"] = {"title": "Publish docs + email", "stdout": out, "stderr": err, "return_code": code}
         if code == 0:
             ol = (out or "").lower()
@@ -592,7 +617,10 @@ with st.expander("Power tools", expanded=False):
             elif "draft-only" in ol:
                 st.warning("Log shows **draft-only** — no live email was sent.")
             elif "skipped" in ol:
-                st.info("Email step may have been **skipped** (duplicate). See log.")
+                st.info(
+                    "Email may have been **skipped** (idempotent guard). Enable *Allow repeat send* in Advanced "
+                    "or set `PULSE_ALLOW_RESEND=true`. See log."
+                )
             else:
                 st.session_state["last_sent_at"] = now_iso()
                 st.success("Publish completed (including email if configured).")

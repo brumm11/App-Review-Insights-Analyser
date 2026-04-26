@@ -358,6 +358,7 @@ def publish(
                 email_text_path=text_path,
                 deep_link=deep_link or "{DOC_DEEP_LINK}",
                 confirm_send=settings.confirm_send,
+                allow_resend=settings.allow_resend,
             )
             gmail_mode = "resend"
         else:
@@ -370,6 +371,7 @@ def publish(
                 email_text_path=text_path,
                 deep_link=deep_link or "{DOC_DEEP_LINK}",
                 confirm_send=settings.confirm_send,
+                allow_resend=settings.allow_resend,
             )
             gmail_mode = "real_google" if settings.use_real_google else "mock"
         update_run_metrics(
@@ -393,7 +395,10 @@ def publish(
             status="published",
         )
         if gmail_result.skipped:
-            print(f"Gmail publish skipped: already sent earlier for run_id={run}")
+            print(
+                f"Email publish skipped: already sent earlier for run_id={run} "
+                f"(set PULSE_ALLOW_RESEND=true to send again)"
+            )
         elif gmail_result.sent:
             print(
                 "Gmail publish sent: "

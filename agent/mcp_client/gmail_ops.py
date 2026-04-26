@@ -31,9 +31,10 @@ class GmailOps:
         email_text_path: Path,
         deep_link: str,
         confirm_send: bool,
+        allow_resend: bool = False,
     ) -> GmailPublishResult:
         found = self.session.call("gmail.search_messages", run_id=run_id)
-        if found.get("messages"):
+        if found.get("messages") and not allow_resend:
             msg = found["messages"][0]
             message_id = str(msg["id"])
             set_run_delivery(self.db_path, run_id=run_id, gmail_message_id=message_id)

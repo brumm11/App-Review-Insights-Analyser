@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     run_weeks_default: int = 10
     log_level: str = "INFO"
     confirm_send: bool = False
+    # When False, a run that already has a delivery id (Resend) or matching Gmail thread is not sent again.
+    allow_resend: bool = True
 
 
 def load_settings() -> Settings:

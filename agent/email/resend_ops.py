@@ -31,10 +31,15 @@ class ResendEmailOps:
         email_text_path: Path,
         deep_link: str,
         confirm_send: bool,
+        allow_resend: bool = False,
     ) -> EmailPublishResult:
         _, existing_message_id = get_run_delivery(self.db_path, run_id)
         # Ignore mock Gmail IDs from earlier runs so Resend can send for real.
-        if existing_message_id and not str(existing_message_id).startswith("msg_"):
+        if (
+            not allow_resend
+            and existing_message_id
+            and not str(existing_message_id).startswith("msg_")
+        ):
             return EmailPublishResult(message_id=existing_message_id, skipped=True, sent=True)
         if not confirm_send:
             return EmailPublishResult(message_id=None, skipped=False, sent=False)

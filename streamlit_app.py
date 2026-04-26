@@ -5,86 +5,109 @@ import os
 import sqlite3
 import subprocess
 import sys
+from datetime import datetime, timezone
 from hashlib import sha1
 from pathlib import Path
 from typing import Any
 
 import streamlit as st
 
+from agent.types import current_iso_week
 
-def inject_pulse_styles() -> None:
+
+def inject_groww_styles() -> None:
     st.markdown(
         """
         <style>
-          @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
-          html, body, [class*="css"]  {
-            font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+          @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+          html, body, [data-testid="stAppViewContainer"] {
+            font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
           }
           .block-container {
-            padding-top: 1.25rem;
+            padding-top: 1.5rem;
             padding-bottom: 3rem;
-            max-width: 1200px;
+            max-width: 880px;
           }
-          .pulse-hero {
-            border: 1px solid rgba(56, 189, 248, 0.25);
-            border-radius: 14px;
-            padding: 1.35rem 1.5rem 1.25rem;
-            margin-bottom: 1.25rem;
-            background: linear-gradient(135deg, rgba(21, 29, 46, 0.95) 0%, rgba(12, 18, 34, 0.6) 100%);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+          .groww-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
           }
-          .pulse-kicker {
-            margin: 0 0 0.35rem;
-            font-size: 0.72rem;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            color: #7dd3fc;
-            font-weight: 600;
-          }
-          .pulse-title {
-            margin: 0 0 0.4rem;
-            font-size: 1.85rem;
-            font-weight: 700;
-            letter-spacing: -0.03em;
-            line-height: 1.15;
-            color: #f8fafc;
-          }
-          .pulse-sub {
+          .groww-title {
             margin: 0;
-            font-size: 0.95rem;
-            color: #94a3b8;
-            max-width: 46rem;
+            font-size: 1.65rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #E6EAF2;
+          }
+          .groww-sub {
+            margin: 0.35rem 0 0;
+            font-size: 0.9rem;
+            color: #8A93A6;
+            max-width: 28rem;
             line-height: 1.45;
           }
-          .pulse-meta {
-            margin-top: 0.85rem;
+          .groww-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #8A93A6;
+            white-space: nowrap;
+          }
+          .groww-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #8A93A6;
+          }
+          .groww-dot-ready { background: #00D09C; box-shadow: 0 0 12px rgba(0, 208, 156, 0.45); }
+          .groww-dot-run { background: #38bdf8; animation: pulse 1.2s ease-in-out infinite; }
+          .groww-dot-fail { background: #f87171; }
+          @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
+          .groww-hero {
+            background: #121826;
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 16px;
+            padding: 1.75rem 1.75rem 1.5rem;
+            margin-bottom: 1.5rem;
+          }
+          .groww-hero h2 {
+            margin: 0 0 0.35rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #E6EAF2;
+          }
+          .groww-hero p {
+            margin: 0 0 1.25rem;
+            font-size: 0.88rem;
+            color: #8A93A6;
+            line-height: 1.5;
+          }
+          .groww-meta {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.45rem;
+            gap: 1.25rem;
+            font-size: 0.78rem;
+            color: #8A93A6;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            padding-top: 1rem;
+            margin-top: 0.25rem;
           }
-          .pulse-chip {
-            display: inline-block;
-            font-size: 0.72rem;
-            padding: 0.2rem 0.55rem;
-            border-radius: 999px;
-            border: 1px solid rgba(148, 163, 184, 0.35);
-            color: #cbd5e1;
-            background: rgba(15, 23, 42, 0.5);
-          }
-          .pulse-chip-ok { border-color: rgba(52, 211, 153, 0.45); color: #6ee7b7; }
-          .pulse-chip-warn { border-color: rgba(251, 191, 36, 0.45); color: #fcd34d; }
-          .pulse-chip-bad { border-color: rgba(248, 113, 113, 0.45); color: #fca5a5; }
+          .groww-meta strong { color: #E6EAF2; font-weight: 500; }
           div[data-testid="stMetric"] {
-            background: rgba(21, 29, 46, 0.65);
-            border: 1px solid rgba(51, 65, 85, 0.55);
-            border-radius: 12px;
-            padding: 0.65rem 0.75rem;
+            background: #121826 !important;
+            border: 1px solid rgba(255,255,255,0.06) !important;
+            border-radius: 14px !important;
+            padding: 0.55rem 0.65rem !important;
           }
-          div[data-testid="stMetric"] label {
-            color: #94a3b8 !important;
-          }
-          div[data-testid="stMetric"] [data-testid="stMetricValue"] {
-            color: #f1f5f9 !important;
+          div[data-testid="stMetric"] label { color: #8A93A6 !important; }
+          div[data-testid="stMetric"] [data-testid="stMetricValue"] { color: #E6EAF2 !important; }
+          div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stMarkdown"]):has(.groww-hero) {
+            margin-bottom: 0;
           }
         </style>
         """,
@@ -92,51 +115,20 @@ def inject_pulse_styles() -> None:
     )
 
 
-def pulse_hero(
-    *,
-    db_path: Path,
-    email_provider: str,
-    use_real_google: bool,
-    resend_configured: bool,
-    cli_available: bool,
-) -> None:
-    chips: list[str] = []
-    if cli_available:
-        chips.append('<span class="pulse-chip pulse-chip-ok">CLI ready</span>')
-    else:
-        chips.append('<span class="pulse-chip pulse-chip-bad">CLI unavailable</span>')
-    if email_provider == "resend":
-        chips.append('<span class="pulse-chip pulse-chip-ok">Email: Resend</span>')
-    else:
-        chips.append('<span class="pulse-chip">Email: Gmail MCP</span>')
-    if email_provider == "gmail" and not use_real_google:
-        chips.append('<span class="pulse-chip pulse-chip-warn">Google: mock</span>')
-    elif use_real_google:
-        chips.append('<span class="pulse-chip pulse-chip-ok">Google: live</span>')
-    else:
-        chips.append('<span class="pulse-chip">Google: off</span>')
-    if email_provider == "resend":
-        chips.append(
-            '<span class="pulse-chip pulse-chip-ok">Resend key</span>'
-            if resend_configured
-            else '<span class="pulse-chip pulse-chip-bad">Resend key missing</span>'
-        )
-    st.markdown(
-        f"""
-        <div class="pulse-hero">
-          <p class="pulse-kicker">Weekly product pulse</p>
-          <h1 class="pulse-title">Control center</h1>
-          <p class="pulse-sub">
-            Generate the weekly note and artifacts, preview on this page, then publish to Docs and/or send the delivery email when you are ready.
-          </p>
-          <div class="pulse-meta">{"".join(chips)}</div>
-          <p class="pulse-sub" style="margin-top:0.75rem;font-size:0.8rem;">
-            Database: <code style="color:#7dd3fc;">{db_path}</code>
-          </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+def init_session() -> None:
+    defaults: dict[str, Any] = {
+        "latest_run_id": None,
+        "report_ready": False,
+        "pipeline_ui_state": "idle",
+        "last_run_at": None,
+        "last_sent_at": None,
+        "last_cli": None,
+        "last_error": None,
+        "dev_run_id_override": "",
+    }
+    for key, val in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = val
 
 
 def get_db_path() -> Path:
@@ -169,7 +161,7 @@ def render_stderr(return_code: int, stderr: str, label: str) -> None:
         return
     if return_code == 0:
         st.warning(f"{label} completed with warnings.")
-        with st.expander(f"{label} warnings"):
+        with st.expander(f"{label} — details"):
             st.code(detail, language="text")
         return
     st.error(detail)
@@ -196,6 +188,10 @@ def get_artifacts_dir() -> Path:
     if not path.is_absolute():
         path = Path.cwd() / path
     return path.resolve()
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
 @st.cache_data(show_spinner=False)
@@ -263,7 +259,7 @@ def build_doc_link(run: dict[str, Any]) -> str | None:
     return f"https://docs.google.com/document/d/{gdoc_id}/edit#heading={heading}"
 
 
-def status_color(status: str) -> str:
+def status_emoji(status: str) -> str:
     if status in {"published", "published_docs"}:
         return "🟢"
     if status in {"failed", "error"}:
@@ -271,113 +267,260 @@ def status_color(status: str) -> str:
     return "🟡"
 
 
+def effective_run_id() -> str | None:
+    override = (st.session_state.get("dev_run_id_override") or "").strip()
+    if override and is_valid_run_id(override):
+        return override.lower()
+    rid = st.session_state.get("latest_run_id")
+    if rid and is_valid_run_id(str(rid)):
+        return str(rid).strip().lower()
+    return None
+
+
+def run_report_pipeline(
+    *,
+    product: str,
+    iso_week: str,
+    weeks: int,
+) -> tuple[bool, str, str, str]:
+    """Ingest → cluster → summarize → render. Returns (ok, run_id, combined_stdout, stderr)."""
+    run_id = build_run_id(product, iso_week)
+    chunks: list[str] = []
+    all_err: list[str] = []
+    steps: list[tuple[str, list[str]]] = [
+        (
+            "Ingest",
+            [
+                sys.executable,
+                "-m",
+                "agent.__main__",
+                "ingest",
+                "--product",
+                product,
+                "--week",
+                iso_week,
+                "--weeks",
+                str(weeks),
+            ],
+        ),
+        ("Cluster", [sys.executable, "-m", "agent.__main__", "cluster", "--run", run_id]),
+        ("Summarize", [sys.executable, "-m", "agent.__main__", "summarize", "--run", run_id]),
+        ("Render", [sys.executable, "-m", "agent.__main__", "render", "--run", run_id]),
+    ]
+    for name, cmd in steps:
+        code, out, err = run_command(cmd)
+        chunks.append(f"== {name} ==\n{(out or '').strip() or '(no stdout)'}")
+        if err.strip():
+            all_err.append(err)
+        if code != 0:
+            return False, run_id, "\n\n".join(chunks), "\n".join(all_err) + f"\n[{name}] exit {code}"
+    return True, run_id, "\n\n".join(chunks), "\n".join(all_err)
+
+
+# --- Page ---
 st.set_page_config(
-    page_title="Weekly Pulse",
+    page_title="Reports Control Center",
     layout="wide",
     page_icon="📈",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
-inject_pulse_styles()
+inject_groww_styles()
+init_session()
 
-if "last_cli" not in st.session_state:
-    st.session_state["last_cli"] = None
-
+cli_available, cli_error = check_pipeline_cli()
 email_provider = (os.getenv("PULSE_EMAIL_PROVIDER", "gmail") or "gmail").strip().lower()
 use_real_google = is_truthy(os.getenv("PULSE_USE_REAL_GOOGLE"))
 resend_configured = bool((os.getenv("PULSE_RESEND_API_KEY") or "").strip())
-db_path_resolved = get_db_path()
-
-with st.sidebar:
-    st.markdown("### Parameters")
-    product = st.selectbox("Product", ["groww", "indmoney"], index=0)
-    iso_week = st.text_input("ISO week", value="2026-W18")
-    weeks = st.number_input("Ingestion window (weeks)", min_value=1, max_value=20, value=10, step=1)
-    st.markdown("---")
-    dry_run = st.toggle("Dry-run (no send)", value=True, help="When on, publish/send will not actually dispatch email.")
-    st.markdown("---")
-    st.markdown("### Run ID")
-    if "publish_run_id" not in st.session_state:
-        st.session_state["publish_run_id"] = ""
-    run_id_to_publish = st.text_area(
-        "Paste full run id (40 hex)",
-        key="publish_run_id",
-        height=100,
-        label_visibility="visible",
-        help="SHA1 of product:week. Must be 40 characters — truncated ids will fail.",
-    )
-
-cli_available, cli_error = check_pipeline_cli()
 runs = load_recent_runs(30)
 latest = runs[0] if runs else None
 
-pulse_hero(
-    db_path=db_path_resolved,
-    email_provider=email_provider,
-    use_real_google=use_real_google,
-    resend_configured=resend_configured,
-    cli_available=cli_available,
+ui_state = str(st.session_state.get("pipeline_ui_state") or "idle")
+dot_class = "groww-dot-ready"
+status_label = "Ready"
+if ui_state == "running":
+    dot_class = "groww-dot-run"
+    status_label = "Running"
+elif ui_state == "failed":
+    dot_class = "groww-dot-fail"
+    status_label = "Failed"
+
+st.markdown(
+    f"""
+    <div class="groww-header">
+      <div>
+        <h1 class="groww-title">Reports Control Center</h1>
+        <p class="groww-sub">Generate and send weekly insights — no run id copy/paste.</p>
+      </div>
+      <div class="groww-status">
+        <span class="groww-dot {dot_class}"></span>
+        <span>{status_label}</span>
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
 if not cli_available:
-    with st.container(border=True):
-        st.warning(
-            "Pipeline CLI is unavailable in this environment. "
-            "Install project dependencies for Run / Publish actions."
-        )
-        with st.expander("CLI error details"):
-            st.code(cli_error, language="text")
+    st.error("CLI is not available in this environment.")
+    with st.expander("Details"):
+        st.code(cli_error, language="text")
+    st.stop()
 
 if email_provider == "gmail" and not use_real_google:
-    st.warning(
-        "Gmail MCP is in mock mode (`PULSE_USE_REAL_GOOGLE=false`). "
-        "No real inbox delivery until Google OAuth is configured."
-    )
+    st.info("Gmail MCP is in mock mode. Use Resend in secrets for real delivery (`PULSE_EMAIL_PROVIDER=resend`).")
 if email_provider == "resend" and not resend_configured:
-    st.error("Resend is selected but `PULSE_RESEND_API_KEY` is missing.")
+    st.warning("`PULSE_RESEND_API_KEY` is not set — Send report will fail until you add it.")
 
-with st.expander("Environment (read-only)", expanded=False):
-    st.code(
-        "\n".join(
-            [
-                f"PULSE_EMAIL_PROVIDER={email_provider}",
-                f"PULSE_USE_REAL_GOOGLE={use_real_google}",
-                f"PULSE_RESEND_API_KEY set={resend_configured}",
-                f"PULSE_CONFIRM_SEND={os.getenv('PULSE_CONFIRM_SEND', '')}",
-            ]
-        ),
-        language="text",
+with st.expander("Advanced (optional)", expanded=False):
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        product = st.selectbox("Product", ["groww", "indmoney"], index=0)
+    with col_b:
+        iso_week = st.text_input("ISO week", value=current_iso_week())
+    with col_c:
+        weeks = st.number_input("Ingestion window (weeks)", min_value=1, max_value=20, value=10, step=1)
+    dry_run = st.toggle("Dry-run send (no email)", value=True)
+    st.text_input(
+        "Dev override: run id (40 hex, optional)",
+        key="dev_run_id_override",
+        help="Leave empty to use the run id from your last successful Run report.",
     )
+    st.caption(f"Database: `{get_db_path()}`")
+
+hero = st.container()
+with hero:
+    st.markdown(
+        """
+        <div class="groww-hero">
+          <h2>Weekly report</h2>
+          <p>Run analysis and render artifacts, then send the delivery email when you are ready.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    c1, c2, c3 = st.columns([1.1, 1.1, 1])
+    run_clicked = c1.button(
+        "Run report",
+        type="primary",
+        use_container_width=True,
+        disabled=ui_state == "running",
+    )
+    send_clicked = c2.button(
+        "Send report",
+        use_container_width=True,
+        disabled=ui_state == "running" or not st.session_state.get("report_ready"),
+    )
+    regen_clicked = c3.button(
+        "Regenerate",
+        use_container_width=True,
+        disabled=ui_state == "running",
+        help="Re-run ingest → render for the same product and week.",
+    )
+
+    lr = st.session_state.get("last_run_at")
+    ls = st.session_state.get("last_sent_at")
+    rid_show = effective_run_id() or "—"
+    st.markdown(
+        f"""
+        <div class="groww-meta">
+          <div><strong>Last run</strong><br/>{lr or "—"}</div>
+          <div><strong>Last send</strong><br/>{ls or "—"}</div>
+          <div><strong>Bound run id</strong><br/><code style="color:#00D09C;font-size:0.72rem;">{rid_show}</code></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+if run_clicked or regen_clicked:
+    st.session_state["pipeline_ui_state"] = "running"
+    st.session_state["last_error"] = None
+    st.toast("Started — running analysis…", icon="⏳")
+    with st.status("Running analysis…", expanded=True) as status:
+        status.write("Running pipeline (ingest → cluster → summarize → render)…")
+        ok, run_id, stdout, stderr = run_report_pipeline(product=product, iso_week=iso_week, weeks=weeks)
+        status.write("Generating report artifacts…")
+        if ok:
+            status.update(label="Report ready", state="complete")
+            st.session_state["latest_run_id"] = run_id
+            st.session_state["report_ready"] = True
+            st.session_state["last_run_at"] = now_iso()
+            st.session_state["pipeline_ui_state"] = "idle"
+            st.session_state["last_cli"] = {
+                "title": "Run report — log",
+                "stdout": stdout,
+                "stderr": stderr,
+                "return_code": 0,
+            }
+            st.cache_data.clear()
+            st.toast("Report generated", icon="✅")
+        else:
+            status.update(label="Failed", state="error")
+            st.session_state["report_ready"] = False
+            st.session_state["pipeline_ui_state"] = "failed"
+            st.session_state["last_error"] = stderr or "Unknown error"
+            st.session_state["last_cli"] = {
+                "title": "Run report — log",
+                "stdout": stdout,
+                "stderr": stderr,
+                "return_code": 1,
+            }
+            st.error("Report run failed. Expand log below.")
+
+if send_clicked:
+    rid = effective_run_id()
+    if not rid:
+        st.error("No run id available. Run report first (or set a valid dev override).")
+    else:
+        st.toast("Sending…", icon="✉️")
+        env_flag = "false" if dry_run else "true"
+        cmd = [
+            sys.executable,
+            "-m",
+            "agent.__main__",
+            "publish",
+            "--run",
+            rid,
+            "--target",
+            "gmail",
+        ]
+        code, out, err = run_command(cmd, env_overrides={"PULSE_CONFIRM_SEND": env_flag})
+        st.session_state["last_cli"] = {
+            "title": "Send report — log",
+            "stdout": out,
+            "stderr": err,
+            "return_code": code,
+        }
+        if code == 0:
+            st.session_state["last_sent_at"] = now_iso()
+            st.cache_data.clear()
+            st.toast("Email send completed", icon="✅")
+            if "skipped" in (out or "").lower():
+                st.info("Provider may have skipped duplicate send; check log output.")
+        else:
+            st.error(f"Send failed (exit {code}).")
+        render_stderr(code, err, "Send report")
 
 with st.container(border=True):
     st.markdown("#### Snapshot")
-    top1, top2, top3, top4 = st.columns(4)
-    top1.metric("Runs visible", str(len(runs)))
-    latest_status = (
-        f"{status_color(latest['status'])} {latest['status']}"
-        if latest
-        else "—"
-    )
-    top2.metric("Latest status", latest_status)
-    top3.metric("Latest run", latest["run_id"][:10] + "…" if latest else "—")
-    top4.metric("Latest week", latest["iso_week"] if latest else "—")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Runs", str(len(runs)))
+    erid = effective_run_id()
+    m2.metric("Bound run id", (erid[:14] + "…") if erid and len(erid) > 14 else (erid or "—"))
+    m3.metric("Latest week", latest["iso_week"] if latest else "—")
 
 last = st.session_state.get("last_cli")
 if isinstance(last, dict) and last.get("stdout") is not None:
-    with st.container(border=True):
-        st.markdown(f"#### {last.get('title', 'Last command output')}")
+    with st.expander(last.get("title", "Activity log"), expanded=bool(st.session_state.get("last_error"))):
         st.code(str(last.get("stdout") or "(no stdout)"), language="bash")
         if last.get("stderr"):
-            with st.expander("Stderr"):
-                st.code(str(last.get("stderr")), language="text")
+            st.code(str(last.get("stderr")), language="text")
         if last.get("return_code") not in (None, 0):
-            st.error(f"Exit code: {last.get('return_code')}")
+            st.caption(f"Exit code: {last.get('return_code')}")
 
-with st.container(border=True):
-    st.markdown("#### Actions")
-    st.caption("Order: generate the report → review below → send email or full publish when ready.")
-    run_col, report_col, email_col, pub_col, ref_col = st.columns([2, 2, 2, 2, 1])
-
-    if run_col.button("Run full pipeline", type="primary", use_container_width=True, disabled=not cli_available):
+with st.expander("Power tools", expanded=False):
+    st.caption("Same CLI as before — optional full pipeline or docs + email.")
+    p1, p2 = st.columns(2)
+    if p1.button("Run full pipeline (includes publish)", use_container_width=True):
         env_flag = "false" if dry_run else "true"
         cmd = [
             sys.executable,
@@ -391,220 +534,80 @@ with st.container(border=True):
             "--weeks",
             str(weeks),
         ]
-        return_code, stdout, stderr = run_command(
-            cmd,
-            env_overrides={"PULSE_CONFIRM_SEND": "false" if dry_run else "true"},
-        )
-        st.session_state["last_cli"] = {
-            "title": "Run full pipeline",
-            "stdout": stdout,
-            "stderr": stderr,
-            "return_code": return_code,
-        }
-        st.markdown("##### Pipeline log")
-        st.code(stdout or "(no stdout)", language="bash")
-        render_stderr(return_code, stderr, "Pipeline run")
-        if return_code == 0:
-            st.success(f"Pipeline finished (PULSE_CONFIRM_SEND={env_flag}).")
+        code, out, err = run_command(cmd, env_overrides={"PULSE_CONFIRM_SEND": env_flag})
+        st.session_state["last_cli"] = {"title": "Full pipeline", "stdout": out, "stderr": err, "return_code": code}
+        if code == 0:
+            rid = build_run_id(product, iso_week)
+            st.session_state["latest_run_id"] = rid
+            st.session_state["report_ready"] = True
+            st.session_state["last_run_at"] = now_iso()
             st.cache_data.clear()
+            st.success("Full pipeline finished.")
         else:
-            st.error(f"Pipeline failed (exit {return_code}).")
-
-    if report_col.button("Generate report only", use_container_width=True, disabled=not cli_available):
-        run_id = build_run_id(product, iso_week)
-        steps: list[tuple[str, list[str]]] = [
-            (
-                "Ingest",
-                [
-                    sys.executable,
-                    "-m",
-                    "agent.__main__",
-                    "ingest",
-                    "--product",
-                    product,
-                    "--week",
-                    iso_week,
-                    "--weeks",
-                    str(weeks),
-                ],
-            ),
-            (
-                "Cluster",
-                [sys.executable, "-m", "agent.__main__", "cluster", "--run", run_id],
-            ),
-            (
-                "Summarize",
-                [sys.executable, "-m", "agent.__main__", "summarize", "--run", run_id],
-            ),
-            (
-                "Render",
-                [sys.executable, "-m", "agent.__main__", "render", "--run", run_id],
-            ),
+            st.error(f"Failed (exit {code}).")
+        render_stderr(code, err, "Full pipeline")
+    rid_pub = effective_run_id()
+    if p2.button("Publish docs + email", use_container_width=True, disabled=not rid_pub):
+        env_flag = "false" if dry_run else "true"
+        cmd = [
+            sys.executable,
+            "-m",
+            "agent.__main__",
+            "publish",
+            "--run",
+            str(rid_pub),
+            "--target",
+            "both",
         ]
-        full_stdout: list[str] = []
-        failed = False
-        for step_name, cmd in steps:
-            return_code, stdout, stderr = run_command(cmd)
-            full_stdout.append(f"== {step_name} ==\n{stdout.strip() or '(no stdout)'}")
-            if return_code != 0:
-                st.error(f"{step_name} failed (exit {return_code}).")
-                render_stderr(return_code, stderr, f"{step_name} step")
-                failed = True
-                break
-            render_stderr(return_code, stderr, f"{step_name} step")
-        st.session_state["last_cli"] = {
-            "title": "Generate report only",
-            "stdout": "\n\n".join(full_stdout),
-            "stderr": "",
-            "return_code": 0 if not failed else 1,
-        }
-        st.markdown("##### Generation log")
-        st.code("\n\n".join(full_stdout), language="bash")
-        if not failed:
-            st.success("Report generated. No email was sent.")
-            st.session_state["publish_run_id"] = run_id
-            st.info(f"Run id copied to sidebar: `{run_id}`")
-            report_dir = get_artifacts_dir() / run_id
-            weekly_note = report_dir / "weekly_note.md"
-            email_text = report_dir / "email.txt"
-            if weekly_note.exists():
-                st.markdown("##### Weekly note (inline)")
-                st.markdown(weekly_note.read_text(encoding="utf-8"))
-            if email_text.exists():
-                with st.expander("Email text preview"):
-                    st.code(email_text.read_text(encoding="utf-8"), language="text")
+        code, out, err = run_command(cmd, env_overrides={"PULSE_CONFIRM_SEND": env_flag})
+        st.session_state["last_cli"] = {"title": "Publish docs + email", "stdout": out, "stderr": err, "return_code": code}
+        if code == 0:
+            st.session_state["last_sent_at"] = now_iso()
             st.cache_data.clear()
-
-    if email_col.button("Send email only", use_container_width=True, disabled=not cli_available):
-        rid = run_id_to_publish.strip()
-        if not rid:
-            st.warning("Enter a run id in the sidebar.")
-        elif not is_valid_run_id(rid):
-            st.error("Run id must be exactly 40 hex characters (full SHA1).")
+            st.success("Publish completed.")
         else:
-            env_flag = "false" if dry_run else "true"
-            cmd = [
-                sys.executable,
-                "-m",
-                "agent.__main__",
-                "publish",
-                "--run",
-                rid,
-                "--target",
-                "gmail",
-            ]
-            return_code, stdout, stderr = run_command(
-                cmd,
-                env_overrides={"PULSE_CONFIRM_SEND": env_flag},
-            )
-            st.session_state["last_cli"] = {
-                "title": "Send email only",
-                "stdout": stdout,
-                "stderr": stderr,
-                "return_code": return_code,
-            }
-            st.markdown("##### Send email log")
-            st.code(stdout or "(no stdout)", language="bash")
-            render_stderr(return_code, stderr, "Send email")
-            if return_code == 0:
-                st.success(f"Finished (PULSE_CONFIRM_SEND={env_flag}).")
-                st.cache_data.clear()
-            else:
-                st.error(f"Send failed (exit {return_code}).")
+            st.error(f"Publish failed (exit {code}).")
+        render_stderr(code, err, "Publish")
 
-    if pub_col.button("Publish docs + email", use_container_width=True, disabled=not cli_available):
-        rid = run_id_to_publish.strip()
-        if not rid:
-            st.warning("Enter a run id in the sidebar.")
-        elif not is_valid_run_id(rid):
-            st.error("Run id must be exactly 40 hex characters (full SHA1).")
-        else:
-            env_flag = "false" if dry_run else "true"
-            cmd = [
-                sys.executable,
-                "-m",
-                "agent.__main__",
-                "publish",
-                "--run",
-                rid,
-                "--target",
-                "both",
-            ]
-            return_code, stdout, stderr = run_command(
-                cmd,
-                env_overrides={"PULSE_CONFIRM_SEND": env_flag},
-            )
-            st.session_state["last_cli"] = {
-                "title": "Publish docs + email",
-                "stdout": stdout,
-                "stderr": stderr,
-                "return_code": return_code,
-            }
-            st.markdown("##### Publish log")
-            st.code(stdout or "(no stdout)", language="bash")
-            render_stderr(return_code, stderr, "Publish")
-            if return_code == 0:
-                st.success(f"Publish completed (PULSE_CONFIRM_SEND={env_flag}).")
-                st.cache_data.clear()
-            else:
-                st.error(f"Publish failed (exit {return_code}).")
-
-    if ref_col.button("Refresh", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-
-with st.container(border=True):
-    st.markdown("#### Report preview")
-    _preview_rid = run_id_to_publish.strip() if run_id_to_publish else ""
-    if _preview_rid and not is_valid_run_id(_preview_rid):
-        st.warning("Run id is not 40 hex characters — fix it in the sidebar to preview or publish.")
-    elif _preview_rid:
-        _art = get_artifacts_dir() / _preview_rid
-        _wn = _art / "weekly_note.md"
-        _et = _art / "email.txt"
-        _eh = _art / "email.html"
-        st.caption(f"Artifacts: `{_art}`")
-        if _wn.exists():
-            st.markdown(_wn.read_text(encoding="utf-8"))
-        else:
-            st.info(f"No `weekly_note.md` at `{_wn}`. Generate a report for this run first.")
-        if _et.exists():
-            with st.expander("Email body (plain text)"):
-                st.code(_et.read_text(encoding="utf-8"), language="text")
-        if _eh.exists():
-            with st.expander("Email HTML (source)"):
-                st.code(_eh.read_text(encoding="utf-8"), language="html")
+st.markdown("#### Preview")
+_rid = effective_run_id()
+if _rid and st.session_state.get("report_ready"):
+    art = get_artifacts_dir() / _rid
+    wn, et, eh = art / "weekly_note.md", art / "email.txt", art / "email.html"
+    if wn.exists():
+        st.markdown(wn.read_text(encoding="utf-8"))
     else:
-        st.info("Enter a run id in the sidebar to load the weekly note and email drafts from disk.")
+        st.info("Weekly note not found yet for this run.")
+    if et.exists():
+        with st.expander("Email (plain text)"):
+            st.code(et.read_text(encoding="utf-8"), language="text")
+    if eh.exists():
+        with st.expander("Email (HTML source)"):
+            st.code(eh.read_text(encoding="utf-8"), language="html")
+else:
+    st.caption("Run a report to see the weekly note and email drafts here.")
 
-left, right = st.columns([1.15, 1.85])
+left, right = st.columns([1, 1.2])
 with left:
-    with st.container(border=True):
-        st.markdown("#### Recent runs")
+    with st.expander("Recent runs", expanded=False):
         if runs:
-            for item in runs[:10]:
-                label = f"{status_color(item['status'])} {item['iso_week']} · {item['product']}"
+            for item in runs[:8]:
+                label = f"{status_emoji(item['status'])} {item['iso_week']} · {item['product']}"
                 with st.expander(label):
                     st.code(item["run_id"], language="text")
-                    st.text(f"Status: {item['status']}")
                     if item["gdoc_heading_id"]:
                         link = build_doc_link(item)
                         if link:
-                            st.markdown(f"[Open doc section]({link})")
-                        else:
-                            st.text(f"gdoc_heading_id: {item['gdoc_heading_id']}")
-                    if item["gmail_message_id"]:
-                        st.text(f"Delivery id: {item['gmail_message_id']}")
+                            st.markdown(f"[Doc link]({link})")
                     metrics = parse_metrics(item["metrics_json"])
                     if metrics:
                         st.json(metrics)
         else:
-            st.info("No runs yet.")
+            st.caption("No runs yet.")
 
 with right:
-    with st.container(border=True):
-        st.markdown("#### Run table")
+    with st.expander("Run table", expanded=False):
         if runs:
             st.dataframe(runs, use_container_width=True, hide_index=True)
         else:
-            st.info("Run a pipeline to populate this table.")
+            st.caption("No data.")

@@ -379,7 +379,11 @@ with st.expander("Advanced (optional)", expanded=False):
         iso_week = st.text_input("ISO week", value=current_iso_week())
     with col_c:
         weeks = st.number_input("Ingestion window (weeks)", min_value=1, max_value=20, value=10, step=1)
-    dry_run = st.toggle("Dry-run send (no email)", value=True)
+    dry_run = st.toggle(
+        "Dry-run send (no email)",
+        value=False,
+        help="When ON, publish succeeds but Resend/Gmail will not actually send — useful for testing.",
+    )
     st.text_input(
         "Dev override: run id (40 hex, optional)",
         key="dev_run_id_override",
@@ -398,6 +402,11 @@ with hero:
         """,
         unsafe_allow_html=True,
     )
+    if dry_run:
+        st.warning(
+            "**Dry-run is on** — “Send report” will **not** deliver mail. "
+            "Turn off *Dry-run send* under **Advanced (optional)** to send for real."
+        )
     c1, c2, c3 = st.columns([1.1, 1.1, 1])
     run_clicked = c1.button(
         "Run report",
@@ -491,11 +500,26 @@ if send_clicked:
             "return_code": code,
         }
         if code == 0:
-            st.session_state["last_sent_at"] = now_iso()
+            out_lower = (out or "").lower()
+            if dry_run:
+                st.warning(
+                    "Command exited successfully, but **no email was sent** because dry-run is ON "
+                    "(the provider never receives a real send). Turn dry-run **off** in Advanced, then send again."
+                )
+                st.toast("No email sent — dry-run is on", icon="⚠️")
+            elif "draft-only" in out_lower:
+                st.warning(
+                    "Publish returned success but log says **draft-only / no send** "
+                    "(usually `PULSE_CONFIRM_SEND=false`). Check Streamlit secrets and dry-run toggle."
+                )
+                st.toast("No email sent — check log", icon="⚠️")
+            elif "skipped" in out_lower:
+                st.info("Send was **skipped** (e.g. duplicate for this run id). Check the activity log for details.")
+                st.toast("Skipped (duplicate?)", icon="ℹ️")
+            else:
+                st.session_state["last_sent_at"] = now_iso()
+                st.toast("Email send completed", icon="✅")
             st.cache_data.clear()
-            st.toast("Email send completed", icon="✅")
-            if "skipped" in (out or "").lower():
-                st.info("Provider may have skipped duplicate send; check log output.")
         else:
             st.error(f"Send failed (exit {code}).")
         render_stderr(code, err, "Send report")
@@ -562,9 +586,17 @@ with st.expander("Power tools", expanded=False):
         code, out, err = run_command(cmd, env_overrides={"PULSE_CONFIRM_SEND": env_flag})
         st.session_state["last_cli"] = {"title": "Publish docs + email", "stdout": out, "stderr": err, "return_code": code}
         if code == 0:
-            st.session_state["last_sent_at"] = now_iso()
+            ol = (out or "").lower()
+            if dry_run:
+                st.warning("Dry-run is on — **no email** was sent. Turn dry-run off to deliver.")
+            elif "draft-only" in ol:
+                st.warning("Log shows **draft-only** — no live email was sent.")
+            elif "skipped" in ol:
+                st.info("Email step may have been **skipped** (duplicate). See log.")
+            else:
+                st.session_state["last_sent_at"] = now_iso()
+                st.success("Publish completed (including email if configured).")
             st.cache_data.clear()
-            st.success("Publish completed.")
         else:
             st.error(f"Publish failed (exit {code}).")
         render_stderr(code, err, "Publish")

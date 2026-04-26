@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     gmail_mcp_transport: str = "mock"
     gmail_mcp_url: str | None = None
     gmail_mcp_command: str | None = None
+    email_provider: str = "gmail"
+    resend_api_key: str | None = None
+    resend_from: str = "onboarding@resend.dev"
     mcp_mock_state_path: Path = Path("data/mcp/mock_state.json")
     use_real_google: bool = False
     google_oauth_client_json_path: Path = Path("credentials/google_oauth_client.json")

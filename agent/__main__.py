@@ -264,6 +264,7 @@ def publish(
     run: Annotated[str, typer.Option("--run", help="Run id to process.")],
     target: Annotated[str, typer.Option("--target", help="docs, gmail or both")] = "both",
 ) -> None:
+    from agent.email.resend_ops import ResendEmailOps
     from agent.mcp_client.docs_ops import DocsOps
     from agent.mcp_client.gmail_ops import GmailOps
     from agent.mcp_client.session import build_sessions_with_transport
@@ -282,7 +283,13 @@ def publish(
         state_path=settings.mcp_mock_state_path,
     )
     docs_ops = DocsOps(docs_session, settings.db_path)
+    email_provider = settings.email_provider.strip().lower()
     gmail_ops = GmailOps(gmail_session, settings.db_path)
+    resend_ops = ResendEmailOps(
+        settings.db_path,
+        api_key=settings.resend_api_key or "",
+        sender=settings.resend_from,
+    )
 
     artifacts_dir = settings.artifacts_dir / run
     doc_path = artifacts_dir / "doc_requests.json"
@@ -342,16 +349,29 @@ def publish(
             window_end=end,
             status="publishing_gmail",
         )
-        gmail_result = gmail_ops.send_pulse_email(
-            run_id=run,
-            product=product,
-            to=to,
-            subject_path=subject_path,
-            email_html_path=html_path,
-            email_text_path=text_path,
-            deep_link=deep_link or "{DOC_DEEP_LINK}",
-            confirm_send=settings.confirm_send,
-        )
+        if email_provider == "resend":
+            gmail_result = resend_ops.send_pulse_email(
+                run_id=run,
+                to=to,
+                subject_path=subject_path,
+                email_html_path=html_path,
+                email_text_path=text_path,
+                deep_link=deep_link or "{DOC_DEEP_LINK}",
+                confirm_send=settings.confirm_send,
+            )
+            gmail_mode = "resend"
+        else:
+            gmail_result = gmail_ops.send_pulse_email(
+                run_id=run,
+                product=product,
+                to=to,
+                subject_path=subject_path,
+                email_html_path=html_path,
+                email_text_path=text_path,
+                deep_link=deep_link or "{DOC_DEEP_LINK}",
+                confirm_send=settings.confirm_send,
+            )
+            gmail_mode = "real_google" if settings.use_real_google else "mock"
         update_run_metrics(
             settings.db_path,
             run,
@@ -359,6 +379,8 @@ def publish(
                 "publish_target": target,
                 "gmail_sent": gmail_result.sent,
                 "gmail_skipped": gmail_result.skipped,
+                "gmail_mode": gmail_mode,
+                "gmail_to": to,
             },
         )
         mark_run_status(
@@ -370,6 +392,23 @@ def publish(
             window_end=end,
             status="published",
         )
+        if gmail_result.skipped:
+            print(f"Gmail publish skipped: already sent earlier for run_id={run}")
+        elif gmail_result.sent:
+            print(
+                "Gmail publish sent: "
+                f"mode={gmail_mode} to={to} message_id={gmail_result.message_id}"
+            )
+            if gmail_mode != "resend" and not settings.use_real_google:
+                print(
+                    "NOTE: This send used mock Gmail transport. "
+                    "No real inbox email is delivered unless PULSE_USE_REAL_GOOGLE=true."
+                )
+        else:
+            print(
+                "Gmail publish draft-only: "
+                f"mode={gmail_mode} to={to} draft_id={gmail_result.draft_id}"
+            )
     print(f"Publish complete: target={target}")
 
 

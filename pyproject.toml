@@ -21,8 +21,6 @@ dependencies = [
   "scikit-learn==1.6.1",
   "umap-learn==0.5.7",
   "hdbscan==0.8.40",
-  "keybert==0.9.0",
-  "sentence-transformers==3.4.1",
   "openai==1.76.0",
   "jsonschema==4.23.0",
   "fastmcp==2.12.5",
@@ -33,6 +31,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+nlp = [
+  "keybert==0.9.0",
+  "sentence-transformers==3.4.1",
+]
 dev = [
   "pytest==8.3.5",
   "ruff==0.11.7",

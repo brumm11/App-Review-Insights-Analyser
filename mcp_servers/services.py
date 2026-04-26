@@ -319,6 +319,8 @@ def _load_google_credentials(*, scopes: list[str]) -> Any:
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
 
+    client_json_inline = os.getenv("PULSE_GOOGLE_OAUTH_CLIENT_JSON", "").strip()
+    token_json_inline = os.getenv("PULSE_GOOGLE_OAUTH_TOKEN_JSON", "").strip()
     client_json_path = Path(
         os.getenv("PULSE_GOOGLE_OAUTH_CLIENT_JSON_PATH", "credentials/google_oauth_client.json")
     )
@@ -327,7 +329,10 @@ def _load_google_credentials(*, scopes: list[str]) -> Any:
     )
     requested_scopes = sorted(set(scopes) | set(ALL_GOOGLE_SCOPES))
     creds: Credentials | None = None
-    if token_path.exists():
+    if token_json_inline:
+        token_info = json.loads(token_json_inline)
+        creds = Credentials.from_authorized_user_info(token_info, scopes=requested_scopes)
+    elif token_path.exists():
         creds = Credentials.from_authorized_user_file(str(token_path), scopes=requested_scopes)
         current_scopes = set(creds.scopes or [])
         if not set(requested_scopes).issubset(current_scopes):
@@ -336,11 +341,25 @@ def _load_google_credentials(*, scopes: list[str]) -> Any:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                str(client_json_path),
-                scopes=requested_scopes,
-            )
-            creds = flow.run_local_server(port=0)
+            if client_json_inline:
+                client_config = json.loads(client_json_inline)
+                flow = InstalledAppFlow.from_client_config(
+                    client_config,
+                    scopes=requested_scopes,
+                )
+                creds = flow.run_local_server(port=0)
+            elif client_json_path.exists():
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    str(client_json_path),
+                    scopes=requested_scopes,
+                )
+                creds = flow.run_local_server(port=0)
+            else:
+                raise RuntimeError(
+                    "Missing Google OAuth credentials. Set either "
+                    "PULSE_GOOGLE_OAUTH_CLIENT_JSON/PULSE_GOOGLE_OAUTH_TOKEN_JSON secrets "
+                    "or provide files at configured *_PATH locations."
+                )
         token_path.parent.mkdir(parents=True, exist_ok=True)
         token_path.write_text(creds.to_json(), encoding="utf-8")
     return creds

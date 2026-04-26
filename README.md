@@ -6,6 +6,7 @@ Automated weekly review intelligence for fintech apps using public App Store / P
 
 1. Install dependencies:
    - `uv sync --extra dev`
+   - Optional (only for `local_bge` embeddings or `use_keybert=true`): `uv sync --extra nlp`
 2. Initialize DB:
    - `uv run pulse init-db`
 3. Explore CLI:
@@ -34,6 +35,14 @@ For each run (`data/artifacts/<run_id>/`):
 - `email.html` and `email.txt` (email draft content)
 - `weekly_note.md` (scannable note guarded to <=250 words)
 - `reviews.csv` (export via `export-csv`)
+
+## Email Provider
+
+- Default publish path uses Gmail MCP (`PULSE_EMAIL_PROVIDER=gmail`).
+- For cloud-friendly sends without Google OAuth, use Resend:
+  - `PULSE_EMAIL_PROVIDER=resend`
+  - `PULSE_RESEND_API_KEY=<your_resend_api_key>`
+  - `PULSE_RESEND_FROM=<verified_sender@yourdomain.com>` (or `onboarding@resend.dev` for quick testing)
 
 ## Theme Legend
 

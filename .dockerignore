@@ -1,0 +1,19 @@
+.git
+.gitignore
+.cursor
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Local/runtime artifacts not needed in image build context
+data/
+credentials/
+.env
+.env.*
+
+# Local docs and notebooks
+docs/
+agent-transcripts/
+*.ipynb
